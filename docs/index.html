@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bloom Desk</title>
+<meta name="description" content="Bloom Desk: مشاريعك، وتركيزك، وحديقة يومك في برنامج واحد هادئ لويندوز. مجاني ومفتوح المصدر.">
+<link rel="icon" type="image/png" href="icon.png">
+<meta property="og:title" content="Bloom Desk 🌸">
+<meta property="og:description" content="مشاريعك، وتركيزك، وحديقة يومك في برنامج واحد هادئ لويندوز.">
+<meta property="og:image" content="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fff8f9;
+    --surface: #ffffff;
+    --text: #2b1f24;
+    --muted: #7a6870;
+    --rose: #e0607e;
+    --rose-deep: #c2405f;
+    --rose-soft: #fde7ec;
+    --leaf: #4e8a3e;
+    --line: #f3d9df;
+    --shadow: 0 10px 30px rgba(194, 64, 95, 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1316;
+      --surface: #241a1e;
+      --text: #f6e9ed;
+      --muted: #c1a9b1;
+      --rose: #f07a95;
+      --rose-deep: #f597ad;
+      --rose-soft: #3a2229;
+      --leaf: #8cc47a;
+      --line: #3b2a30;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.7;
+  }
+  a { color: var(--rose-deep); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+
+  /* top bar */
+  header { padding: 18px 0; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; }
+  .brand img { width: 34px; height: 34px; }
+  .gh { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); text-decoration: none; font-weight: 500; }
+  .gh:hover { color: var(--text); }
+  .gh svg { width: 20px; height: 20px; fill: currentColor; }
+
+  /* hero */
+  .hero { text-align: center; padding: 48px 0 72px; }
+  .hero-icon {
+    width: 150px; height: 150px;
+    filter: drop-shadow(0 18px 30px rgba(224, 96, 126, 0.35));
+    animation: sway 6s ease-in-out infinite;
+  }
+  @keyframes sway {
+    0%, 100% { transform: rotate(-4deg) translateY(0); }
+    50% { transform: rotate(4deg) translateY(-6px); }
+  }
+  @media (prefers-reduced-motion: reduce) { .hero-icon { animation: none; } }
+  h1 { font-size: clamp(2.4rem, 6vw, 3.6rem); margin: 18px 0 6px; letter-spacing: -0.5px; direction: ltr; }
+  .tagline { font-size: clamp(1.1rem, 2.6vw, 1.35rem); color: var(--muted); max-width: 620px; margin: 0 auto 32px; }
+  .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 14px 26px; border-radius: 999px;
+    font: inherit; font-weight: 600; font-size: 1.05rem;
+    text-decoration: none; transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn-primary { background: var(--rose); color: #fff; box-shadow: var(--shadow); }
+  .btn-primary:hover { background: var(--rose-deep); transform: translateY(-2px); }
+  .btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--line); }
+  .btn-ghost:hover { transform: translateY(-2px); }
+  .btn svg { width: 20px; height: 20px; fill: currentColor; }
+  .meta { margin-top: 14px; color: var(--muted); font-size: .92rem; }
+
+  /* sections */
+  section { padding: 56px 0; }
+  h2 { font-size: clamp(1.6rem, 4vw, 2rem); text-align: center; margin: 0 0 8px; }
+  .lead { text-align: center; color: var(--muted); margin: 0 auto 36px; max-width: 560px; }
+
+  .problems { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .problem {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+    padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .problem .q { color: var(--muted); font-size: .95rem; }
+  .problem .a { font-weight: 600; }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 22px;
+    padding: 24px; box-shadow: var(--shadow);
+  }
+  .card .emoji { font-size: 2rem; line-height: 1; }
+  .card h3 { margin: 12px 0 6px; font-size: 1.15rem; }
+  .card p { margin: 0; color: var(--muted); }
+
+  .steps { counter-reset: step; display: grid; gap: 14px; max-width: 640px; margin: 0 auto; padding: 0; list-style: none; }
+  .steps li {
+    counter-increment: step; position: relative;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+    padding: 16px 64px 16px 20px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+    width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--rose-soft); color: var(--rose-deep); font-weight: 700;
+  }
+  .note {
+    max-width: 640px; margin: 20px auto 0; padding: 16px 20px;
+    border-radius: 18px; background: var(--rose-soft); color: var(--text);
+  }
+  .note strong { color: var(--rose-deep); }
+  kbd {
+    font-family: inherit; font-size: .9em; padding: 1px 8px; border-radius: 6px;
+    background: var(--surface); border: 1px solid var(--line);
+  }
+
+  .cta { text-align: center; }
+  footer { padding: 36px 0 48px; color: var(--muted); font-size: .9rem; text-align: center; border-top: 1px solid var(--line); }
+  footer p { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="">Bloom Desk</a>
+    <a class="gh" href="https://github.com/marwathebest/bloom-desk">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      الكود على GitHub
+    </a>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <img class="hero-icon" src="icon.png" alt="وردة Bloom Desk">
+      <h1>Bloom Desk</h1>
+      <p class="tagline">مكتبك الهادئ: مشاريعك، وتركيزك، وحديقة يومك في برنامج واحد لويندوز 🌸</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/marwathebest/bloom-desk/releases/latest/download/BloomDesk-Setup.exe">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5v-2z"/></svg>
+          حمّل لويندوز
+        </a>
+        <a class="btn btn-ghost" href="#features">وش يسوي؟</a>
+      </div>
+      <p class="meta">مجاني · مفتوح المصدر · Windows 10 و 11 · تقريباً 11 MB</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>انبنى عشان يحل ٤ مشاكل يومية</h2>
+      <p class="lead">كل وحدة منها لها حل داخل البرنامج</p>
+      <div class="problems">
+        <div class="problem"><span class="q">أضيع بين الملفات والمجلدات</span><span class="a">📂 معرض مشاريع بضغطة</span></div>
+        <div class="problem"><span class="q">أتشتت وتطير الأفكار</span><span class="a">🌱 جلسات تركيز وصندوق أفكار</span></div>
+        <div class="problem"><span class="q">أنسى وقت راحتي</span><span class="a">☕ راحة وتذكير بعد كل جلسة</span></div>
+        <div class="problem"><span class="q">ما أعرف وين راح يومي</span><span class="a">🌷 حديقة اليوم</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>وش يسوي Bloom Desk؟</h2>
+      <p class="lead">صُمّم للمبرمجين وصنّاع المشاريع اللي عندهم مشاريع كثيرة ووقت قليل</p>
+      <div class="features">
+        <div class="card">
+          <div class="emoji">📂</div>
+          <h3>مشاريعك في مكان واحد</h3>
+          <p>اسحب مجلد المشروع وافلته، ويتعرّف بنفسه على النوع (Flutter، أو React، أو موقع)، والاسم، ورابط GitHub، والموقع المنشور.</p>
+        </div>
+        <div class="card">
+          <div class="emoji">▶️</div>
+          <h3>شغّل بضغطة، بدون إحراج</h3>
+          <p>زر واحد يشغّل المشروع بالأمر الصحيح، وينتظر السيرفر إلى أن يجهز، ويفتح المتصفح لحاله. والمشاريع المنشورة تفتح موقعها الحقيقي.</p>
+        </div>
+        <div class="card">
+          <div class="emoji">✅</div>
+          <h3>جهّز للعرض</h3>
+          <p>قبل الاجتماع يفحص كل مشاريعك: 🟢 جاهز، و🟡 يحتاج تجهيز (ويصلّحه بضغطة)، و🔴 فيه مشكلة. ويصحّي المواقع النايمة مسبقاً.</p>
+        </div>
+        <div class="card">
+          <div class="emoji">🌱</div>
+          <h3>جلسة تركيز</h3>
+          <p>تختار المشروع والمدة، ووردة بلونه تكبر مع وقتك. خلّصت؟ تتفتح 🌹. وجتك فكرة وسط الشغل؟ اكتبها بسطر وكمّل.</p>
+        </div>
+        <div class="card">
+          <div class="emoji">☕</div>
+          <h3>راحة تستاهلها</h3>
+          <p>بعد كل جلسة تذكير هادئ: 💧 اشرب ماء، و🧘 تمدد، و👀 قاعدة 20-20-20 لعيونك.</p>
+        </div>
+        <div class="card">
+          <div class="emoji">🌷</div>
+          <h3>حديقة اليوم</h3>
+          <p>وردة لكل جلسة، وشريط يوضّح وين راح وقتك لكل مشروع، وكل أفكارك الطارئة مجمّعة. وترجع لأي يوم قبل.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>التثبيت</h2>
+      <p class="lead">دقيقة وحدة، وما يحتاج صلاحيات مدير</p>
+      <ol class="steps">
+        <li>حمّل <strong>BloomDesk-Setup.exe</strong> من الزر فوق</li>
+        <li>افتح الملف، واختر إذا تبي أيقونة على سطح المكتب، واضغط <strong>Install</strong></li>
+        <li>افتح Bloom Desk من قائمة ابدأ، واسحب أول مجلد مشروع 🌸</li>
+      </ol>
+      <div class="note">
+        <strong>⚠️ طبيعي يطلع لك تحذير أزرق من ويندوز</strong> مكتوب فيه "Windows protected your PC"، لأن البرنامج جديد وما عليه توقيع رقمي مدفوع.
+        اضغط <kbd>More info</kbd> ثم <kbd>Run anyway</kbd>. والكود كامل مفتوح على GitHub لأي أحد يبي يتأكد منه.
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="wrap">
+      <h2>جاهز تزرع أول وردة؟ 🌱</h2>
+      <p class="lead">مجاني بالكامل، وبياناتك تبقى على جهازك</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/marwathebest/bloom-desk/releases/latest/download/BloomDesk-Setup.exe">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5v-2z"/></svg>
+          حمّل Bloom Desk
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>صُنع بـ Flutter و🌸 بواسطة <a href="https://github.com/marwathebest">marwathebest</a> · رخصة MIT</p>
+    <p>أيقونة الوردة من <a href="https://github.com/microsoft/fluentui-emoji">Fluent Emoji</a> من Microsoft (رخصة MIT)</p>
+  </div>
+</footer>
+
+</body>
+</html>
