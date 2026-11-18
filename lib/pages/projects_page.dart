@@ -47,6 +47,16 @@ class _ProjectsPageState extends State<ProjectsPage> {
   void initState() {
     super.initState();
     _load();
+    // لما ترجع لهالنافذة، نحدّث القائمة بالتغييرات اللي صارت في نافذة ثانية
+    _lifecycle = AppLifecycleListener(onResume: _load);
+  }
+
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -102,16 +112,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
     );
     if (result == null) return; // ضغط "إلغاء"
 
+    final fresh = await _store.upsert(result);
+    if (!mounted) return;
     setState(() {
-      final index = _projects.indexWhere((p) => p.id == result.id);
-      if (index == -1) {
-        _projects.add(result);
-      } else {
-        _projects[index] = result;
-      }
+      _projects = fresh;
       _health.remove(result.id); // تغيّر المشروع، فالفحص القديم ما عاد ينفع
     });
-    await _store.save(_projects);
   }
 
   Future<void> _delete(Project project) async {
@@ -136,10 +142,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
     );
     if (confirmed != true) return;
 
-    setState(() {
-      _projects.removeWhere((p) => p.id == project.id);
-    });
-    await _store.save(_projects);
+    final fresh = await _store.remove(project.id);
+    if (!mounted) return;
+    setState(() => _projects = fresh);
   }
 
   // أسرع طريقة: تختار المجلد، والباقي يتعبّى تلقائياً
@@ -157,10 +162,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
   Future<void> _addFromFolders(List<String> paths) async {
     final added = <Project>[];
     var skipped = 0;
+    // نقرأ آخر نسخة، عشان نعرف المشاريع اللي انضافت من نافذة ثانية
+    final current = await _store.load();
 
     for (final path in paths) {
       final isFolder = Directory(path).existsSync();
-      final alreadyAdded = _projects.any(
+      final alreadyAdded = current.any(
         (p) => p.path.toLowerCase() == path.toLowerCase(),
       );
       if (!isFolder || alreadyAdded) {
@@ -168,7 +175,20 @@ class _ProjectsPageState extends State<ProjectsPage> {
         continue;
       }
 
-      final detected = detectProject(path);
+      // لو صار أي خطأ وقت فحص المجلد، نضيفه باسم المجلد بدل ما نوقف
+      DetectedProject detected;
+      try {
+        detected = detectProject(path);
+      } on Object {
+        detected = DetectedProject(
+          name: path
+              .split(RegExp(r'[\\/]'))
+              .lastWhere((part) => part.isNotEmpty, orElse: () => path),
+          description: '',
+          type: ProjectType.other,
+          links: const [],
+        );
+      }
       added.add(
         Project(
           id: '${DateTime.now().microsecondsSinceEpoch}_${added.length}',
@@ -177,7 +197,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
           path: path,
           type: detected.type,
           color:
-              projectColors[(_projects.length + added.length) %
+              projectColors[(current.length + added.length) %
                   projectColors.length],
           links: detected.links,
           liveUrl: detected.liveUrl,
@@ -187,6 +207,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
     if (!mounted) return;
     if (added.isEmpty) {
+      setState(() => _projects = current);
       _showMessage(
         skipped > 0
             ? 'هذا المشروع موجود من قبل، أو اللي سحبته ملف مو مجلد'
@@ -195,9 +216,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
       return;
     }
 
-    setState(() => _projects.addAll(added));
-    await _store.save(_projects);
+    final fresh = await _store.upsertAll(added);
     if (!mounted) return;
+    setState(() => _projects = fresh);
 
     final first = added.first;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -239,8 +260,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
   }
 
   Future<void> _setStatus(Project project, ProjectStatus status) async {
-    setState(() => project.status = status);
-    await _store.save(_projects);
+    setState(() => project.status = status); // يتغير فوراً على الشاشة
+    final fresh = await _store.upsert(project);
+    if (!mounted) return;
+    setState(() => _projects = fresh);
   }
 
   // ✅ جهّز للعرض: يفحص كل المشاريع مع بعض

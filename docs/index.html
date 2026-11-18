@@ -133,6 +133,18 @@
     background: var(--surface); border: 1px solid var(--line);
   }
 
+  /* screenshots */
+  .shots { display: grid; gap: 20px; }
+  .shot {
+    margin: 0;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+    overflow: hidden; box-shadow: var(--shadow);
+  }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot figcaption { padding: 12px 18px; color: var(--muted); font-size: .95rem; }
+  .shot figcaption strong { color: var(--text); }
+  .shots-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+
   .cta { text-align: center; }
   footer { padding: 36px 0 48px; color: var(--muted); font-size: .9rem; text-align: center; border-top: 1px solid var(--line); }
   footer p { margin: 4px 0; }
@@ -161,9 +173,35 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5v-2z"/></svg>
           حمّل لويندوز
         </a>
-        <a class="btn btn-ghost" href="#features">وش يسوي؟</a>
+        <a class="btn btn-ghost" href="#screens">شوف الصور</a>
       </div>
       <p class="meta">مجاني · مفتوح المصدر · Windows 10 و 11 · تقريباً 11 MB</p>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <h2>شوفه بعينك</h2>
+      <p class="lead">لقطات حقيقية من البرنامج على ويندوز</p>
+      <div class="shots">
+        <figure class="shot">
+          <img src="screenshots/projects.png" width="1264" height="812" loading="lazy"
+               alt="شاشة مشاريعي: بطاقات ملونة لكل مشروع مع حالته وأزرار التشغيل">
+          <figcaption><strong>📂 مشاريعي:</strong> كل مشروع ببطاقة ولون وحالة، وزر يشغّله أو يفتح موقعه المنشور</figcaption>
+        </figure>
+        <div class="shots-row">
+          <figure class="shot">
+            <img src="screenshots/focus.png" width="1264" height="812" loading="lazy"
+                 alt="جلسة تركيز: وردة تكبر وعدّاد للوقت الباقي">
+            <figcaption><strong>🌱 جلسة تركيز:</strong> وردتك تكبر مع وقتك</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="screenshots/garden.png" width="1264" height="812" loading="lazy"
+                 alt="حديقة اليوم: وردة لكل جلسة وشريط يوضّح الوقت لكل مشروع">
+            <figcaption><strong>🌷 حديقة اليوم:</strong> وردة لكل جلسة، ووين راح وقتك</figcaption>
+          </figure>
+        </div>
+      </div>
     </div>
   </section>
 

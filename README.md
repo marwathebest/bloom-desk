@@ -13,6 +13,14 @@
 
 </div>
 
+## الصور
+
+![مشاريعي](docs/screenshots/projects.png)
+
+| 🌱 جلسة تركيز | 🌷 حديقة اليوم |
+|---|---|
+| ![جلسة تركيز](docs/screenshots/focus.png) | ![حديقة اليوم](docs/screenshots/garden.png) |
+
 ## المميزات
 
 | | |

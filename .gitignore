@@ -56,3 +56,5 @@ app.*.map.json
 /bloom_desk/
 /bloom_desk.sln
 /bloom_desk.vcxproj*
+
+.vscode/

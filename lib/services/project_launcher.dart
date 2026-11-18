@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/project.dart';
+import 'text_file.dart';
 
 // الخطة: وش بنسوي لما تضغط "اعرض"
 class LaunchPlan {
@@ -40,7 +41,7 @@ int? detectPort(String path) {
   final packageFile = File(p.join(path, 'package.json'));
   Map? package;
   try {
-    final json = jsonDecode(packageFile.readAsStringSync());
+    final json = jsonDecode(readTextSafely(packageFile));
     if (json is Map) package = json;
   } on Object {
     package = null;
@@ -73,7 +74,7 @@ int? detectPort(String path) {
     if (!file.existsSync()) continue;
     final match = RegExp(
       r'(?:PORT\)?\s*\|\|\s*|\.listen\(\s*|\bport\s*:\s*)(\d{2,5})',
-    ).firstMatch(file.readAsStringSync());
+    ).firstMatch(readTextSafely(file));
     if (match != null) return int.parse(match.group(1)!);
   }
 
@@ -167,7 +168,7 @@ String? _npmScript(String path) {
   final file = File(p.join(path, 'package.json'));
   if (!file.existsSync()) return null;
   try {
-    final json = jsonDecode(file.readAsStringSync());
+    final json = jsonDecode(readTextSafely(file));
     final scripts = json is Map ? json['scripts'] : null;
     if (scripts is! Map) return null;
     if (scripts.containsKey('dev')) return 'dev';

@@ -293,49 +293,55 @@ class ProjectCard extends StatelessWidget {
                   if (checking || health != null) const SizedBox(height: 8),
 
                   // أزرار التشغيل
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: FilledButton.icon(
-                          onPressed: onRun,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: project.color,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                          ),
-                          icon: Icon(
-                            _isLive ? Icons.public : Icons.play_arrow_rounded,
-                          ),
-                          label: Text(
-                            _isLive ? 'افتح الموقع' : 'اعرض',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 2,
-                        child: OutlinedButton.icon(
-                          onPressed: onOpenCode,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                          ),
-                          icon: const Icon(Icons.code, size: 18),
-                          label: const Text(
-                            'VS Code',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                  // لو البطاقة عريضة: "VS Code" بالاسم، ولو ضيقة: أيقونة بس
+                  LayoutBuilder(
+                    builder: (context, constraints) => Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: onRun,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: project.color,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                            ),
+                            icon: Icon(
+                              _isLive ? Icons.public : Icons.play_arrow_rounded,
+                            ),
+                            label: Text(
+                              _isLive ? 'افتح الموقع' : 'اعرض',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'افتح المجلد',
-                        onPressed: onOpenFolder,
-                        icon: const Icon(Icons.folder_open_outlined),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        if (constraints.maxWidth >= 300)
+                          OutlinedButton.icon(
+                            onPressed: onOpenCode,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                            ),
+                            icon: const Icon(Icons.code, size: 18),
+                            label: const Text('VS Code'),
+                          )
+                        else
+                          IconButton.outlined(
+                            tooltip: 'افتح في VS Code',
+                            onPressed: onOpenCode,
+                            icon: const Icon(Icons.code, size: 18),
+                          ),
+                        IconButton(
+                          tooltip: 'افتح المجلد',
+                          onPressed: onOpenFolder,
+                          icon: const Icon(Icons.folder_open_outlined),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

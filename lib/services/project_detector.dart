@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../models/project.dart';
+import 'text_file.dart';
 
 // اللي يطلع من فحص المجلد
 class DetectedProject {
@@ -36,7 +37,7 @@ DetectedProject detectProject(String folderPath) {
   if (pubspec.existsSync()) {
     // مشروع Flutter
     type = ProjectType.flutter;
-    final text = pubspec.readAsStringSync();
+    final text = readTextSafely(pubspec);
     name = _yamlValue(text, 'name') ?? name;
     description = _yamlValue(text, 'description') ?? '';
     if (description == 'A new Flutter project.') description = '';
@@ -44,7 +45,7 @@ DetectedProject detectProject(String folderPath) {
     // مشروع React أو Node
     type = ProjectType.react;
     try {
-      final json = jsonDecode(packageJson.readAsStringSync());
+      final json = jsonDecode(readTextSafely(packageJson));
       if (json is Map) {
         final jsonName = json['name'];
         if (jsonName is String && jsonName.trim().isNotEmpty) name = jsonName;
@@ -69,7 +70,7 @@ DetectedProject detectProject(String folderPath) {
     for (final folder in ['', 'public', 'web']) {
       final cname = File(p.join(folderPath, folder, 'CNAME'));
       if (cname.existsSync()) {
-        final domain = cname.readAsStringSync().trim().split('\n').first.trim();
+        final domain = readTextSafely(cname).trim().split('\n').first.trim();
         if (domain.isNotEmpty) liveUrl = 'https://$domain';
         break;
       }
@@ -116,7 +117,7 @@ String? _readmeLiveUrl(String folderPath, List<String> names) {
 
   final keys = names.map((n) => n.toLowerCase()).where((n) => n.isNotEmpty);
   final urls = RegExp(r'''https?://[^\s)\]>"'`]+''')
-      .allMatches(readme.readAsStringSync())
+      .allMatches(readTextSafely(readme))
       .map((m) => m.group(0)!.replaceAll(RegExp(r'[.,;:!]+$'), ''))
       .where((url) => keys.any((k) => url.toLowerCase().contains(k)))
       .toList();
@@ -134,7 +135,7 @@ String? _readmeLiveUrl(String folderPath, List<String> names) {
 String? _renderUrl(String folderPath) {
   final file = File(p.join(folderPath, 'render.yaml'));
   if (!file.existsSync()) return null;
-  final service = _yamlValue(file.readAsStringSync(), r'\s*-?\s*name');
+  final service = _yamlValue(readTextSafely(file), r'\s*-?\s*name');
   return service == null ? null : 'https://$service.onrender.com';
 }
 
@@ -158,7 +159,7 @@ String? _gitRemote(String folderPath) {
   final match = RegExp(
     r'^\s*url\s*=\s*(.+)$',
     multiLine: true,
-  ).firstMatch(config.readAsStringSync());
+  ).firstMatch(readTextSafely(config));
   if (match == null) return null;
   return gitUrlToWeb(match.group(1)!.trim());
 }
