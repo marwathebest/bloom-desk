@@ -162,6 +162,7 @@ void main() {
 
   testWidgets('change status on a card and filter by it', (tester) async {
     SharedPreferences.setMockInitialValues({
+      'view': 'grid',
       'projects': jsonEncode([
         {'id': '1', 'name': 'Alpha', 'color': 0xFFE0607E, 'status': 'done'},
         {'id': '2', 'name': 'Beta', 'color': 0xFF4E9A6B},

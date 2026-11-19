@@ -142,7 +142,7 @@ void main() {
   testWidgets('picking a folder adds the project with detected details', (
     WidgetTester tester,
   ) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'view': 'grid'});
     final dir = makeFolder({
       'pubspec.yaml': 'name: rose_garden\n',
       '.git/config': '\turl = https://github.com/me/rose_garden.git\n',
@@ -178,6 +178,7 @@ void main() {
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({
+      'view': 'grid',
       'projects': jsonEncode([
         {
           'id': '1',

@@ -59,7 +59,14 @@ class Project {
     this.runCommand = '',
     this.liveUrl = '',
     this.status = ProjectStatus.inProgress,
+    this.notes = '',
   }) : links = links ?? [];
+
+  // ملاحظات حرة (للأفكار خصوصاً: وش الفكرة، وش تحتاج، خطوات أولى...)
+  String notes;
+
+  // فكرة بس، لسا ما لها مجلد ولا موقع
+  bool get isNoteOnly => path.trim().isEmpty && liveUrl.trim().isEmpty;
 
   // الحالة: فكرة، أو قيد العمل، أو مكتمل
   ProjectStatus status;
@@ -82,6 +89,7 @@ class Project {
     'runCommand': runCommand,
     'liveUrl': liveUrl,
     'status': status.name,
+    'notes': notes,
   };
 
   // ونرجّعه من النص لمشروع لما نفتح التطبيق
@@ -102,5 +110,6 @@ class Project {
       (s) => s.name == json['status'],
       orElse: () => ProjectStatus.inProgress,
     ),
+    notes: json['notes'] as String? ?? '',
   );
 }

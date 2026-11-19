@@ -27,6 +27,7 @@ class _ProjectFormState extends State<ProjectForm> {
   late final TextEditingController _links;
   late final TextEditingController _runCommand;
   late final TextEditingController _liveUrl;
+  late final TextEditingController _notes;
   String? _liveUrlHint; // رسالة لو ما لقينا رابط
   late ProjectType _type;
   late Color _color;
@@ -44,6 +45,7 @@ class _ProjectFormState extends State<ProjectForm> {
     _links = TextEditingController(text: p?.links.join('\n') ?? '');
     _runCommand = TextEditingController(text: p?.runCommand ?? '');
     _liveUrl = TextEditingController(text: p?.liveUrl ?? '');
+    _notes = TextEditingController(text: p?.notes ?? '');
     _type = p?.type ?? ProjectType.flutter;
     _color = p?.color ?? projectColors.first;
     _status = p?.status ?? ProjectStatus.inProgress;
@@ -57,6 +59,7 @@ class _ProjectFormState extends State<ProjectForm> {
     _links.dispose();
     _runCommand.dispose();
     _liveUrl.dispose();
+    _notes.dispose();
     super.dispose();
   }
 
@@ -114,6 +117,7 @@ class _ProjectFormState extends State<ProjectForm> {
         links: links,
         runCommand: _runCommand.text.trim(),
         liveUrl: _liveUrl.text.trim(),
+        notes: _notes.text.trim(),
       ),
     );
   }
@@ -150,6 +154,18 @@ class _ProjectFormState extends State<ProjectForm> {
                   maxLines: 2,
                   decoration: const InputDecoration(
                     labelText: 'وصف قصير',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _notes,
+                  minLines: 3,
+                  maxLines: 8,
+                  decoration: const InputDecoration(
+                    labelText: '📝 ملاحظات',
+                    hintText: 'وش الفكرة؟ وش تحتاج؟ أول خطوة؟',
+                    alignLabelWithHint: true,
                     border: OutlineInputBorder(),
                   ),
                 ),

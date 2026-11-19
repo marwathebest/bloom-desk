@@ -15,6 +15,13 @@ import '../services/health_check.dart';
 import '../services/project_detector.dart';
 import '../services/project_launcher.dart';
 import '../services/project_store.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../services/save_queue.dart';
+import '../widgets/idea_dialog.dart';
+import '../widgets/kanban_board.dart';
+import '../widgets/kanban_card.dart';
 import '../widgets/project_card.dart';
 import '../widgets/project_form.dart';
 
@@ -38,6 +45,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
   String _search = '';
   bool _dragging = false; // فيه مجلد يتسحب فوق النافذة؟
   ProjectStatus? _filter; // null = الكل
+  String _view = 'board'; // 'board' = لوحة كانبان، 'grid' = بطاقات
   final Map<String, HealthResult> _health = {}; // نتائج "جهّز للعرض"
   final Set<String> _checking = {}; // المشاريع اللي تنفحص الحين
   final _sessionStore = SessionStore();
@@ -62,12 +70,46 @@ class _ProjectsPageState extends State<ProjectsPage> {
   Future<void> _load() async {
     final projects = await _store.load();
     final sessions = await _sessionStore.load();
+    final prefs = await SharedPreferences.getInstance();
+    final view = prefs.getString('view');
     if (!mounted) return;
     setState(() {
       _projects = projects;
       _sessions = sessions;
+      if (view == 'board' || view == 'grid') _view = view!;
       _loading = false;
     });
+  }
+
+  // نحفظ اختيارك (لوحة أو بطاقات) عشان يفتح عليه المرة الجاية
+  Future<void> _setView(String view) async {
+    setState(() => _view = view);
+    await SaveQueue.shared.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      await prefs.setString('view', view);
+    });
+  }
+
+  // 💡 فكرة جديدة: ملاحظة في عمود الأفكار، بدون مجلد
+  Future<void> _addIdea() async {
+    final idea = await showDialog<({String title, String notes})>(
+      context: context,
+      builder: (_) => const IdeaDialog(),
+    );
+    if (idea == null) return;
+    final fresh = await _store.upsert(
+      Project(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: idea.title,
+        notes: idea.notes,
+        type: ProjectType.other,
+        status: ProjectStatus.idea,
+        color: projectColors[_projects.length % projectColors.length],
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _projects = fresh);
   }
 
   // 🌷 حديقة اليوم
@@ -272,7 +314,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
       _showMessage('الفحص يشتغل في نسخة ويندوز بس 🪟');
       return;
     }
-    final projects = List.of(_projects);
+    // الأفكار اللي لسا ما لها مجلد ولا موقع ما فيه شي نفحصه فيها
+    final projects = _projects.where((p) => !p.isNoteOnly).toList();
     setState(() {
       _health.clear();
       _checking.addAll(projects.map((p) => p.id));
@@ -323,7 +366,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
     final visible = _projects
         .where(
           (p) =>
-              (_filter == null || p.status == _filter) &&
+              (_view == 'board' || _filter == null || p.status == _filter) &&
               (p.name.toLowerCase().contains(query) ||
                   p.description.toLowerCase().contains(query)),
         )
@@ -404,9 +447,33 @@ class _ProjectsPageState extends State<ProjectsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'مشاريعي (${_projects.length})',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'مشاريعي (${_projects.length})',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        // التبديل بين اللوحة والبطاقات
+                        SegmentedButton<String>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment(
+                              value: 'board',
+                              icon: Icon(Icons.view_kanban_outlined),
+                              label: Text('لوحة'),
+                            ),
+                            ButtonSegment(
+                              value: 'grid',
+                              icon: Icon(Icons.grid_view_outlined),
+                              label: Text('بطاقات'),
+                            ),
+                          ],
+                          selected: {_view},
+                          onSelectionChanged: (s) => _setView(s.first),
+                        ),
+                      ],
                     ),
                     // ملخص اليوم من جلسات التركيز
                     Builder(
@@ -449,33 +516,56 @@ class _ProjectsPageState extends State<ProjectsPage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // فلتر الحالة
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: Text('الكل (${_projects.length})'),
-                          selected: _filter == null,
-                          onSelected: (_) => setState(() => _filter = null),
-                        ),
-                        for (final s in ProjectStatus.values)
+                    // فلتر الحالة (في البطاقات بس؛ اللوحة فيها أعمدة الحالة)
+                    if (_view == 'grid') ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
                           ChoiceChip(
-                            label: Text(
-                              '${s.emoji} ${s.label} '
-                              '(${_projects.where((p) => p.status == s).length})',
-                            ),
-                            selected: _filter == s,
-                            onSelected: (_) => setState(() => _filter = s),
+                            label: Text('الكل (${_projects.length})'),
+                            selected: _filter == null,
+                            onSelected: (_) => setState(() => _filter = null),
                           ),
-                      ],
-                    ),
+                          for (final s in ProjectStatus.values)
+                            ChoiceChip(
+                              label: Text(
+                                '${s.emoji} ${s.label} '
+                                '(${_projects.where((p) => p.status == s).length})',
+                              ),
+                              selected: _filter == s,
+                              onSelected: (_) => setState(() => _filter = s),
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
               Expanded(
-                child: visible.isEmpty
+                child: _view == 'board'
+                    // 📋 لوحة كانبان
+                    ? KanbanBoard(
+                        projects: visible,
+                        onMove: _setStatus,
+                        onAddIdea: _addIdea,
+                        cardBuilder: (project) => KanbanCard(
+                          project: project,
+                          onRun: () => _run(project),
+                          onRunLocal: () => _runLocal(project),
+                          onOpenCode: () => _act(openInVsCode, project),
+                          onOpenFolder: () => _act(openFolder, project),
+                          onEdit: () => _addOrEdit(project),
+                          onDelete: () => _delete(project),
+                          onFocus: () => _startFocus(project),
+                          health: _health[project.id],
+                          checking: _checking.contains(project.id),
+                          onFix: () => _fix(project),
+                        ),
+                      )
+                    // 🔲 البطاقات
+                    : visible.isEmpty
                     ? const Center(child: Text('ما فيه مشاريع هنا 🔍'))
                     : GridView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
@@ -493,21 +583,8 @@ class _ProjectsPageState extends State<ProjectsPage> {
                             project: project,
                             onEdit: () => _addOrEdit(project),
                             onDelete: () => _delete(project),
-                            onRun: () => _act(
-                              runProject,
-                              project,
-                              successMessage: project.liveUrl.trim().isNotEmpty
-                                  ? '🌐 يفتح موقع «${project.name}»...'
-                                  : project.type == ProjectType.react
-                                  ? '▶️ يشتغل «${project.name}»... والمتصفح بينفتح لحاله أول ما يجهز'
-                                  : '▶️ يشتغل «${project.name}»...',
-                            ),
-                            onRunLocal: () => _act(
-                              (p) => runProject(p, local: true),
-                              project,
-                              successMessage:
-                                  '▶️ يشتغل «${project.name}» من جهازك... والمتصفح بينفتح لحاله أول ما يجهز',
-                            ),
+                            onRun: () => _run(project),
+                            onRunLocal: () => _runLocal(project),
                             onOpenCode: () => _act(openInVsCode, project),
                             onOpenFolder: () => _act(openFolder, project),
                             onStatusChanged: (s) => _setStatus(project, s),
@@ -522,6 +599,23 @@ class _ProjectsPageState extends State<ProjectsPage> {
             ],
           );
   }
+
+  void _run(Project project) => _act(
+    runProject,
+    project,
+    successMessage: project.liveUrl.trim().isNotEmpty
+        ? '🌐 يفتح موقع «${project.name}»...'
+        : project.type == ProjectType.react
+        ? '▶️ يشتغل «${project.name}»... والمتصفح بينفتح لحاله أول ما يجهز'
+        : '▶️ يشتغل «${project.name}»...',
+  );
+
+  void _runLocal(Project project) => _act(
+    (p) => runProject(p, local: true),
+    project,
+    successMessage:
+        '▶️ يشتغل «${project.name}» من جهازك... والمتصفح بينفتح لحاله أول ما يجهز',
+  );
 }
 
 // يظهر لما تسحب مجلد فوق النافذة

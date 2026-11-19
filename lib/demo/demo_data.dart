@@ -69,6 +69,15 @@ final List<Project> demoProjects = [
     type: ProjectType.react,
     color: projectColors[4],
     status: ProjectStatus.idea,
+    notes: 'يبدأ بمادة وحدة\nيقرأ ملفات PDF',
+  ),
+  Project(
+    id: 'd7',
+    name: 'تطبيق ري النباتات',
+    type: ProjectType.other,
+    color: projectColors[2],
+    status: ProjectStatus.idea,
+    notes: 'تذكير يومي لكل نبتة\nصورة قبل وبعد\nأسأل أختي وش تحتاج',
   ),
 ];
 
