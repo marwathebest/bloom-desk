@@ -7,19 +7,28 @@ class FocusRosePainter extends CustomPainter {
   FocusRosePainter({
     required this.growth,
     required this.color,
-    this.sway = 0,
+    this.time = 0,
+    this.sparkles = false,
     this.wilted = false,
   });
 
   final double growth; // من 0 (بداية الجلسة) إلى 1 (خلصت)
   final Color color; // لون المشروع
-  final double sway; // التمايل مع الهواء
-  final bool wilted; // 🥀 ذبلت؟
+  final double time; // الوقت بالثواني: منه تتحرك الوردة (تمايل، تنفّس، أوراق)
+  final bool sparkles; // ✨ لمعات تطلع حول الوردة وأنت مركّز
+  final bool wilted; // 🥀 ذبلت؟ (للجلسات القديمة)
+
+  // التمايل: موجة هادية + هبّات هوا صغيرة فوقها، فيطلع طبيعي مو آلي
+  double get _sway =>
+      sin(time * 1.1) * 0.045 +
+      sin(time * 2.7 + 1.3) * 0.012 +
+      sin(time * 0.35) * 0.02;
 
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.shortestSide / 300;
     final g = growth.clamp(0.0, 1.0);
+    final sway = _sway;
 
     // المراحل: الساق يطلع، بعدين الأوراق، بعدين الزهرة تتفتح
     final stemGrow =
@@ -63,32 +72,69 @@ class FocusRosePainter extends CustomPainter {
       final leafColor = wilted
           ? const Color(0xFFA5A878)
           : const Color(0xFF66A84F);
+      // كل ورقة ترفرف بتوقيت مختلف
       _leaf(
         canvas,
         Offset(6 * s, -stemLength * 0.32),
-        -0.7,
+        -0.7 + sin(time * 2.3) * 0.09,
         leafGrow * s,
         leafColor,
       );
       _leaf(
         canvas,
         Offset(9 * s, -stemLength * 0.55),
-        pi + 0.6,
+        pi + 0.6 + sin(time * 2.0 + 2.1) * 0.1,
         leafGrow * 0.85 * s,
         leafColor,
       );
     }
 
-    // الزهرة
+    // الزهرة: تتنفّس (تكبر وتصغر شوي) وتلتفت مع الهوا
     if (bloom > 0) {
       canvas.save();
       canvas.translate(top.dx, top.dy);
       if (wilted) canvas.rotate(1.0); // راسها مايل
+      canvas.rotate(sin(time * 1.4 + 0.6) * 0.05);
+      final breath = 1 + sin(time * 1.7) * 0.035 * bloom.clamp(0.0, 1.0);
+      canvas.scale(breath);
       _flower(canvas, 46 * s, bloom, wilted ? _faded(color) : color);
       canvas.restore();
     }
 
     canvas.restore();
+
+    // ✨ لمعات تطلع لفوق حول الوردة
+    if (sparkles && !wilted) {
+      _sparkles(canvas, size, ground, stemLength * stemGrow, s);
+    }
+  }
+
+  void _sparkles(
+    Canvas canvas,
+    Size size,
+    Offset ground,
+    double height,
+    double s,
+  ) {
+    const count = 9;
+    for (var i = 0; i < count; i++) {
+      // كل لمعة لها دورة خاصة: تطلع من تحت لفوق وتختفي
+      final speed = 0.09 + (i % 4) * 0.025;
+      final phase = (time * speed + i / count) % 1.0;
+      final side = (i.isEven ? 1 : -1) * (30 + (i * 37) % 70) * s;
+      final x = ground.dx + side + sin(time * 1.3 + i) * 10 * s;
+      final y = ground.dy - 20 * s - phase * (height + 70 * s);
+      final fade = sin(phase * pi); // تبان بالنص وتختفي بالأطراف
+      final radius = (1.6 + (i % 3)) * s;
+      final glow = Paint()
+        ..color = Color.lerp(
+          color,
+          Colors.white,
+          0.55,
+        )!.withValues(alpha: 0.75 * fade)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2.5 * s);
+      canvas.drawCircle(Offset(x, y), radius, glow);
+    }
   }
 
   void _leaf(
@@ -133,13 +179,15 @@ class FocusRosePainter extends CustomPainter {
       1 - show(0.5),
     );
 
+    // الحلقات تلتف شوي عكس بعض، كأن البتلات تتحرك مع الهوا
+    final drift = sin(time * 0.9) * 0.05;
     _ring(
       canvas,
       5,
       size * 0.45,
       size * 1.0,
       size * 1.1,
-      0,
+      drift,
       shade(-0.12),
       show(0.55),
     );
@@ -149,11 +197,20 @@ class FocusRosePainter extends CustomPainter {
       size * 0.28,
       size * 0.75,
       size * 0.8,
-      pi / 5,
+      pi / 5 - drift * 1.4,
       shade(-0.04),
       show(0.25),
     );
-    _ring(canvas, 3, size * 0.12, size * 0.5, size * 0.6, 0.4, shade(0.06), 1);
+    _ring(
+      canvas,
+      3,
+      size * 0.12,
+      size * 0.5,
+      size * 0.6,
+      0.4 + drift * 2,
+      shade(0.06),
+      1,
+    );
 
     canvas.drawCircle(Offset.zero, size * 0.18, Paint()..color = shade(-0.1));
     canvas.drawArc(
@@ -210,6 +267,7 @@ class FocusRosePainter extends CustomPainter {
   bool shouldRepaint(covariant FocusRosePainter old) =>
       old.growth != growth ||
       old.color != color ||
-      old.sway != sway ||
+      old.time != time ||
+      old.sparkles != sparkles ||
       old.wilted != wilted;
 }

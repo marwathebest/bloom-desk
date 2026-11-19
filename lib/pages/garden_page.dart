@@ -21,7 +21,7 @@ class _GardenPageState extends State<GardenPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _sway = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 6),
+    duration: const Duration(minutes: 10),
   )..repeat();
 
   late DateTime _day = _now();
@@ -90,7 +90,7 @@ class _GardenPageState extends State<GardenPage>
                 _empty(theme)
               else ...[
                 Text(
-                  '🌹 ${summary.bloomed}   🥀 ${summary.wilted}   ·   '
+                  '🌹 ${summary.bloomed}   🌱 ${summary.wilted}   ·   '
                   '${formatMinutes(summary.focusedMinutes)} تركيز',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium,
@@ -179,9 +179,11 @@ class _GardenPageState extends State<GardenPage>
                     painter: FocusRosePainter(
                       growth: growth,
                       color: Color(s.colorValue),
-                      wilted: !s.completed,
-                      sway:
-                          sin(_sway.value * 2 * pi + s.startedAt.minute) * 0.03,
+                      // كل وردة لها توقيت خاص فما يتمايلون مع بعض
+                      time:
+                          _sway.value * 600 +
+                          s.startedAt.minute * 1.7 +
+                          s.startedAt.hour,
                     ),
                   ),
                 ),
@@ -205,7 +207,7 @@ class _GardenPageState extends State<GardenPage>
         final theme = Theme.of(context);
         return AlertDialog(
           title: Text(
-            '${s.completed ? '🌹' : '🥀'} '
+            '${s.completed ? '🌹' : '🌱'} '
             '${s.task.isEmpty ? 'جلسة تركيز' : s.task}',
           ),
           content: SizedBox(

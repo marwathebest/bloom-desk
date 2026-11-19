@@ -141,17 +141,22 @@ Map<String, Object> demoPrefs(DateTime now) => {
   ),
 };
 
-// لصورة جلسة التركيز: ساعة توقف عند ١٤ دقيقة من ٢٥
-DateTime Function() demoFocusClock() {
-  final start = DateTime.now();
-  var first = true;
-  return () {
-    if (first) {
-      first = false;
-      return start;
-    }
-    return start.add(const Duration(minutes: 14, seconds: 12));
-  };
+// لصورة جلسة التركيز: جلسة وصلت ١٤ دقيقة من ٢٥، وفيها فكرة طارئة
+FocusSession demoFocusSession() {
+  final rose = demoProjects.first;
+  return FocusSession(
+    id: 'demo-focus',
+    projectId: rose.id,
+    projectName: rose.name,
+    colorValue: rose.color.toARGB32(),
+    task: 'ألوان جديدة للورد',
+    plannedMinutes: 25,
+    focusedSeconds: 14 * 60 + 12,
+    completed: false,
+    startedAt: DateTime.now().subtract(const Duration(minutes: 15)),
+    ideas: const ['زر مشاركة'],
+    active: true,
+  );
 }
 
 const demoAccent = Color(0xFFE0607E);

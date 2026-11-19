@@ -99,7 +99,7 @@ void main() {
 
     expect(find.text('اليوم'), findsOneWidget);
     expect(find.textContaining('🌹 2'), findsOneWidget);
-    expect(find.textContaining('🥀 1'), findsOneWidget);
+    expect(find.textContaining('🌱 1'), findsOneWidget);
     expect(find.textContaining('1 س 20 د تركيز'), findsOneWidget);
 
     // One rose per session, labelled with its start time

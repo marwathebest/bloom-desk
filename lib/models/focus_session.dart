@@ -11,7 +11,36 @@ class FocusSession {
     required this.completed,
     required this.startedAt,
     this.ideas = const [],
+    this.active = false,
+    this.updatedAt,
   });
+
+  // الجلسة لسا شغّالة (تنحفظ كل ٣٠ ثانية). لو انقفل البرنامج وهي active،
+  // نعرض عليك تكمّلها
+  final bool active;
+  final DateTime? updatedAt; // آخر حفظ
+
+  FocusSession copyWith({
+    int? plannedMinutes,
+    int? focusedSeconds,
+    bool? completed,
+    List<String>? ideas,
+    bool? active,
+    DateTime? updatedAt,
+  }) => FocusSession(
+    id: id,
+    projectId: projectId,
+    projectName: projectName,
+    colorValue: colorValue,
+    task: task,
+    plannedMinutes: plannedMinutes ?? this.plannedMinutes,
+    focusedSeconds: focusedSeconds ?? this.focusedSeconds,
+    completed: completed ?? this.completed,
+    startedAt: startedAt,
+    ideas: ideas ?? this.ideas,
+    active: active ?? this.active,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 
   final String id;
   final String? projectId; // null = جلسة بدون مشروع
@@ -35,6 +64,8 @@ class FocusSession {
     'completed': completed,
     'startedAt': startedAt.toIso8601String(),
     'ideas': ideas,
+    'active': active,
+    if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
   };
 
   factory FocusSession.fromJson(Map<String, dynamic> json) => FocusSession(
@@ -48,7 +79,19 @@ class FocusSession {
     completed: json['completed'] as bool? ?? false,
     startedAt: DateTime.parse(json['startedAt'] as String),
     ideas: (json['ideas'] as List?)?.cast<String>() ?? const [],
+    active: json['active'] as bool? ?? false,
+    updatedAt: json['updatedAt'] == null
+        ? null
+        : DateTime.parse(json['updatedAt'] as String),
   );
+
+  // جلسة انقطعت: كانت شغّالة، وما انحفظت من فترة (يعني البرنامج انقفل)
+  // نتأكد إنها مو شغّالة الحين في نافذة ثانية: آخر حفظ قبل أكثر من ٩٠ ثانية
+  bool isUnfinished(DateTime now) =>
+      active &&
+      !completed &&
+      now.difference(updatedAt ?? startedAt) > const Duration(seconds: 90) &&
+      now.difference(startedAt) < const Duration(hours: 12);
 }
 
 // ملخص يوم واحد

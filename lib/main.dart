@@ -11,6 +11,7 @@ import 'models/focus_session.dart';
 import 'pages/focus_page.dart';
 import 'pages/garden_page.dart';
 import 'pages/projects_page.dart';
+import 'services/focus_environment.dart';
 import 'services/migrate_old_data.dart';
 
 // نقطة البداية
@@ -23,6 +24,11 @@ Future<void> main(List<String> args) async {
         InMemorySharedPreferencesStore.withData(demoPrefs(DateTime.now()));
     runApp(BloomDeskApp(demoScreen: args.isEmpty ? 'projects' : args.first));
     return;
+  }
+
+  // الإشعارات، والنافذة الصغيرة، والأصوات (ويندوز بس)
+  if (!kIsWeb && Platform.isWindows) {
+    await FocusEnvironment.setupWindows();
   }
 
   // ننقل بيانات النسخ القديمة (لو موجودة) قبل ما يفتح البرنامج
@@ -57,7 +63,7 @@ class BloomDeskApp extends StatelessWidget {
           task: 'ألوان جديدة للورد',
           minutes: 25,
           project: demoProjects.first,
-          clock: demoFocusClock(),
+          resume: demoFocusSession(),
         );
       case 'garden':
         final List<FocusSession> sessions = demoSessions(DateTime.now());

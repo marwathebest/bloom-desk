@@ -148,7 +148,7 @@ void main() {
     await tester.pumpWidget(const SizedBox()); // stop timers
   });
 
-  testWidgets('ending early wilts the rose and still saves the time', (
+  testWidgets('ending early leaves a bud and still saves the time', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -165,7 +165,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('🥀 ذبلت هالمرة'), findsOneWidget);
+    expect(find.text('🌱 وردتك صارت برعم'), findsOneWidget);
     final saved = await savedSessions(tester);
     expect(saved.single.completed, isFalse);
     expect(saved.single.focusedSeconds, 180);
@@ -256,7 +256,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('🌹 1'), findsOneWidget);
-    expect(find.textContaining('🥀 1'), findsOneWidget);
+    expect(find.textContaining('🌱 1'), findsOneWidget);
     expect(find.textContaining('30 د تركيز'), findsOneWidget);
   });
 }

@@ -3,8 +3,10 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audioplayers_windows
   desktop_drop
   file_selector_windows
+  local_notifier
   url_launcher_windows
 )
 

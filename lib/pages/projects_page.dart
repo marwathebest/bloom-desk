@@ -79,6 +79,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
       if (view == 'board' || view == 'grid') _view = view!;
       _loading = false;
     });
+    await _offerResume();
   }
 
   // نحفظ اختيارك (لوحة أو بطاقات) عشان يفتح عليه المرة الجاية
@@ -128,7 +129,10 @@ class _ProjectsPageState extends State<ProjectsPage> {
           FocusSetupDialog(projects: _projects, initialProject: project),
     );
     if (setup == null || !mounted) return;
+    await _runFocus(setup);
+  }
 
+  Future<void> _runFocus(FocusSetup setup, {FocusSession? resume}) async {
     final result = await Navigator.push<String>(
       context,
       MaterialPageRoute(
@@ -136,6 +140,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
           task: setup.task,
           minutes: setup.minutes,
           project: setup.project,
+          resume: resume,
         ),
       ),
     );
@@ -144,6 +149,64 @@ class _ProjectsPageState extends State<ProjectsPage> {
     if (!mounted) return;
     setState(() => _sessions = sessions);
     if (result == 'again') _startFocus(setup.project);
+    // "ابدأ الجلسة الجاية لحالها": نفس المشروع والمهمة والمدة، بدون نافذة
+    if (result == 'again-auto') {
+      _runFocus(
+        FocusSetup(
+          project: setup.project,
+          task: setup.task,
+          minutes: resume?.plannedMinutes ?? setup.minutes,
+        ),
+      );
+    }
+  }
+
+  // 🌱 جلسة انقطعت (انقفل البرنامج وهي شغّالة): نعرض عليك تكمّلها
+  bool _checkedUnfinished = false;
+
+  Future<void> _offerResume() async {
+    if (_checkedUnfinished) return;
+    _checkedUnfinished = true;
+    final now = DateTime.now();
+    final unfinished = _sessions.where((s) => s.isUnfinished(now)).toList();
+    if (unfinished.isEmpty) return;
+    final s = unfinished.last;
+    final project = _projects.where((p) => p.id == s.projectId).firstOrNull;
+    final minutes = s.focusedSeconds ~/ 60;
+
+    final resume = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🌱 عندك جلسة ما خلصت'),
+        content: Text(
+          '«${s.task.isEmpty ? 'جلسة تركيز' : s.task}»'
+          '${project == null ? '' : ' على ${project.name}'}\n'
+          'ركّزت $minutes من ${s.plannedMinutes} دقيقة قبل ما ينقفل البرنامج.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('خلّها برعم'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('كمّل الجلسة'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (resume == true) {
+      await _runFocus(
+        FocusSetup(project: project, task: s.task, minutes: s.plannedMinutes),
+        resume: s,
+      );
+    } else {
+      // تبقى برعم في الحديقة بالوقت اللي ركّزته
+      await _sessionStore.upsert(s.copyWith(active: false));
+      final sessions = await _sessionStore.load();
+      if (mounted) setState(() => _sessions = sessions);
+    }
   }
 
   // إضافة مشروع جديد، أو تعديل مشروع موجود
@@ -486,7 +549,7 @@ class _ProjectsPageState extends State<ProjectsPage> {
                             onTap: _openGarden,
                             borderRadius: BorderRadius.circular(8),
                             child: Text(
-                              'اليوم:  🌹 ${today.bloomed}   🥀 ${today.wilted}'
+                              'اليوم:  🌹 ${today.bloomed}   🌱 ${today.wilted}'
                               '   ·   ${formatMinutes(today.focusedMinutes)} تركيز  ‹',
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(
