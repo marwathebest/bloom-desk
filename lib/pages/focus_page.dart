@@ -1,21 +1,20 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/focus_session.dart';
 import '../models/project.dart';
+import '../services/focus_controller.dart';
 import '../services/focus_environment.dart';
-import '../services/focus_prefs.dart';
 import '../services/project_store.dart';
 import '../services/session_store.dart';
 import '../widgets/focus_rose_painter.dart';
 
-// مراحل الجلسة
-// budded = أنهيت بدري: الوردة توقف على حجمها (برعم) بدل ما تذبل
-enum FocusPhase { focusing, bloomed, budded, onBreak, breakDone }
+export '../services/focus_controller.dart' show FocusPhase;
 
-// صفحة جلسة التركيز: وردة تكبر مع الوقت
+// صفحة جلسة التركيز: تعرض "محرّك" الجلسة (FocusController)
+//
+// لما تنفتح من صفحة المشاريع، المحرّك يجي جاهز من برا: ترجع لمشاريعك
+// والجلسة تكمل بالخلفية، ويطلع شريط الجلسة فوق.
+// ولو انفتحت لحالها (مثل الاختبارات)، تسوي محرّكها بنفسها وتوقفه لما تنقفل.
 class FocusPage extends StatefulWidget {
   const FocusPage({
     super.key,
@@ -27,6 +26,7 @@ class FocusPage extends StatefulWidget {
     this.clock,
     this.resume,
     this.environment,
+    this.controller,
   });
 
   final String task;
@@ -37,6 +37,7 @@ class FocusPage extends StatefulWidget {
   final DateTime Function()? clock; // للاختبارات: ساعة نتحكم فيها
   final FocusSession? resume; // جلسة انقطعت ونكمّلها
   final FocusEnvironment? environment; // النافذة والتنبيهات والأصوات
+  final FocusController? controller; // جلسة شغّالة جاية من صفحة المشاريع
 
   @override
   State<FocusPage> createState() => _FocusPageState();
@@ -49,171 +50,55 @@ class _FocusPageState extends State<FocusPage>
     vsync: this,
     duration: const Duration(minutes: 10),
   )..repeat();
-  late final SessionStore _store = widget.store ?? SessionStore();
-  late final ProjectStore _projectStore = widget.projectStore ?? ProjectStore();
-  late final FocusEnvironment _env =
-      widget.environment ?? FocusEnvironment.current;
-  final _prefs = FocusPrefs();
+
+  late final bool _ownsSession = widget.controller == null;
+  late final FocusController _c =
+      widget.controller ??
+      FocusController(
+        task: widget.task,
+        minutes: widget.minutes,
+        project: widget.project,
+        store: widget.store,
+        projectStore: widget.projectStore,
+        clock: widget.clock,
+        resume: widget.resume,
+        environment: widget.environment,
+      );
   final _ideaController = TextEditingController();
-  late final List<String> _ideas = List.of(widget.resume?.ideas ?? const []);
 
-  Timer? _timer;
-  FocusPhase _phase = FocusPhase.focusing;
-  late final String _id;
-  late final DateTime _startedAt;
-  late int _plannedMinutes; // يزيد لو ضغطت "+٥ دقائق"
-  Duration _accumulated = Duration.zero; // الوقت قبل آخر إيقاف مؤقت
-  DateTime? _resumedAt; // null = موقوف مؤقتاً
-  DateTime? _breakEndsAt;
-  int _breakMinutes = 5;
-  DateTime? _lastSaveAt;
-
-  // اليوم
-  int _doneBefore = 0; // جلسات اليوم المكتملة قبل هذي
-  bool _completedThis = false;
-  int _goal = FocusPrefs.defaultGoal;
-  bool _autoNext = false;
-  String _sound = 'off';
-
-  // النافذة الصغيرة
-  bool _mini = false;
-  Rect? _fullBounds;
-
-  String? _ideasMessage; // بعد ما ترسل الأفكار للملاحظات أو اللوحة
-
-  DateTime _now() => (widget.clock ?? DateTime.now)();
-  Duration get _planned => Duration(minutes: _plannedMinutes);
-  bool get _paused => _resumedAt == null;
-  Color get _color => widget.project?.color ?? const Color(0xFFE0607E);
-  int get _doneToday => _doneBefore + (_completedThis ? 1 : 0);
-  bool get _longBreak => _breakMinutes == 15;
-  String get _title => widget.task.isEmpty ? 'ركّز 🌱' : widget.task;
-
-  // الوقت اللي ركّزته فعلاً (بدون أوقات الإيقاف)
-  Duration get _focused {
-    final running = _paused ? Duration.zero : _now().difference(_resumedAt!);
-    final total = _accumulated + running;
-    return total > _planned ? _planned : total;
-  }
-
-  double get _growth => _focused.inMilliseconds / _planned.inMilliseconds;
+  // الجلسة تكمل بالخلفية لو رجعت؟ (بس لما المحرّك جاي من برا)
+  bool get _background => !_ownsSession;
 
   @override
   void initState() {
     super.initState();
-    final resume = widget.resume;
-    _startedAt = resume?.startedAt ?? _now();
-    _id = resume?.id ?? _startedAt.microsecondsSinceEpoch.toString();
-    _plannedMinutes = resume?.plannedMinutes ?? widget.minutes;
-    _accumulated = Duration(seconds: resume?.focusedSeconds ?? 0);
-    _resumedAt = _now();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
-    _loadToday();
+    _c.addListener(_changed);
+    _c.pageOpen = true;
+    if (_ownsSession) {
+      _c.onNext = (kind) {
+        if (mounted) Navigator.pop(context, kind);
+      };
+    }
   }
 
-  Future<void> _loadToday() async {
-    final sessions = await _store.load();
-    final goal = await _prefs.dailyGoal();
-    final autoNext = await _prefs.autoNext();
-    final sound = await _prefs.sound();
-    if (!mounted) return;
-    final today = _now();
-    setState(() {
-      _doneBefore = sessions
-          .where(
-            (s) => s.completed && s.id != _id && isSameDay(s.startedAt, today),
-          )
-          .length;
-      _goal = goal;
-      _autoNext = autoNext;
-      _sound = sound;
-    });
-    _applySound();
+  void _changed() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _c.removeListener(_changed);
+    _c.pageOpen = false;
+    if (_ownsSession) _c.dispose();
     _motion.dispose();
     _ideaController.dispose();
-    _env.stopSound();
-    if (_mini) {
-      _env.window.setAlwaysOnTop(false);
-      if (_fullBounds != null) _env.window.setBounds(_fullBounds!);
-    }
     super.dispose();
   }
 
-  void _tick() {
-    if (!mounted) return;
-    if (_phase == FocusPhase.focusing && _focused >= _planned) {
-      _complete();
-      return;
-    }
-    if (_phase == FocusPhase.onBreak && !_now().isBefore(_breakEndsAt!)) {
-      _breakOver();
-      return;
-    }
-    // حفظ تلقائي كل ٣٠ ثانية (حتى وأنت موقف مؤقتاً): لو انقفل البرنامج
-    // فجأة، وقتك ما يضيع، والبرنامج يعرض عليك تكمّل الجلسة
-    if (_phase == FocusPhase.focusing &&
-        _focused.inSeconds >= 60 &&
-        (_lastSaveAt == null ||
-            _now().difference(_lastSaveAt!) >= const Duration(seconds: 30))) {
-      _save(completed: false, active: true);
-    }
-    setState(() {}); // نحدّث العداد
-  }
-
-  void _togglePause() {
-    setState(() {
-      if (_paused) {
-        _resumedAt = _now();
-      } else {
-        _accumulated += _now().difference(_resumedAt!);
-        _resumedAt = null;
-      }
-    });
-    _applySound();
-  }
-
-  void _addFiveMinutes() => setState(() => _plannedMinutes += 5);
-
-  // 🌹 خلص الوقت
-  Future<void> _complete() async {
-    setState(() {
-      _accumulated = _planned;
-      _resumedAt = null;
-      _phase = FocusPhase.bloomed;
-      _completedThis = true;
-      // كل ٤ جلسات اليوم: راحة طويلة
-      _breakMinutes = _doneToday % 4 == 0
-          ? 15
-          : _plannedMinutes >= 45
-          ? 10
-          : 5;
-    });
-    _env.stopSound();
-    _alert(
-      '🌹 تفتحت وردتك!',
-      'ركّزت $_plannedMinutes دقيقة على «$_title». وقت الراحة ☕',
-    );
-    await _save(completed: true, active: false);
-  }
-
-  // 🌱 أنهيت بدري: الوردة توقف على حجمها، والوقت ينحسب
-  Future<void> _finishEarly() async {
-    if (_phase != FocusPhase.focusing) return;
-    final focused = _focused;
-    setState(() {
-      _accumulated = focused;
-      _resumedAt = null;
-      _phase = FocusPhase.budded;
-    });
-    _env.stopSound();
-    if (focused.inSeconds >= 60 || _lastSaveAt != null) {
-      await _save(completed: false, active: false);
-    }
+  // "رجوع" بعد ما تخلص الجلسة: الجلسة انتهت، نقفلها ونرجع
+  void _done() {
+    _c.close();
+    Navigator.pop(context);
   }
 
   Future<void> _confirmEnd() async {
@@ -236,10 +121,10 @@ class _FocusPageState extends State<FocusPage>
         ],
       ),
     );
-    if (confirmed == true && mounted) await _finishEarly();
+    if (confirmed == true && mounted) await _c.finishEarly();
   }
 
-  // زر الرجوع وسط الجلسة: ثلاث خيارات بدل الإنهاء مباشرة
+  // زر الرجوع وسط جلسة ما تكمل بالخلفية: ثلاث خيارات
   Future<void> _onBack() async {
     final choice = await showDialog<String>(
       context: context,
@@ -263,142 +148,13 @@ class _FocusPageState extends State<FocusPage>
       ),
     );
     if (!mounted) return;
-    if (choice == 'pause' && !_paused) _togglePause();
-    if (choice == 'end') await _finishEarly();
-  }
-
-  Future<void> _save({required bool completed, required bool active}) {
-    final now = _now();
-    _lastSaveAt = now;
-    return _store.upsert(
-      FocusSession(
-        id: _id,
-        projectId: widget.project?.id,
-        projectName: widget.project?.name ?? '',
-        colorValue: _color.toARGB32(),
-        task: widget.task,
-        plannedMinutes: _plannedMinutes,
-        focusedSeconds: _focused.inSeconds,
-        completed: completed,
-        startedAt: _startedAt,
-        ideas: List.of(_ideas),
-        active: active,
-        updatedAt: now,
-      ),
-    );
-  }
-
-  // 🔔 تنبيه: صوت + إشعار ويندوز + وميض في شريط المهام
-  void _alert(String title, String body) {
-    SystemSound.play(SystemSoundType.alert);
-    _env.notify(title, body);
-    _env.window.flash();
-  }
-
-  void _startBreak() {
-    setState(() {
-      _phase = FocusPhase.onBreak;
-      _breakEndsAt = _now().add(Duration(minutes: _breakMinutes));
-    });
-  }
-
-  void _breakOver({bool skipped = false}) {
-    setState(() => _phase = FocusPhase.breakDone);
-    if (!skipped) _alert('💪 خلصت الراحة', 'جاهز للجلسة الجاية؟');
-    if (_autoNext) Navigator.pop(context, 'again-auto');
-  }
-
-  Future<void> _setAutoNext(bool on) async {
-    setState(() => _autoNext = on);
-    await _prefs.setAutoNext(on);
-  }
-
-  Future<void> _setSound(String id) async {
-    setState(() => _sound = id);
-    _applySound();
-    await _prefs.setSound(id);
-  }
-
-  // الصوت يشتغل بس وأنت مركّز، ويوقف مع الإيقاف المؤقت
-  void _applySound() {
-    final file = focusSounds
-        .firstWhere((s) => s.id == _sound, orElse: () => focusSounds.first)
-        .file;
-    if (_phase == FocusPhase.focusing && !_paused && file != null) {
-      _env.playSound(file);
-    } else {
-      _env.stopSound();
-    }
-  }
-
-  // 🪟 نافذة صغيرة فوق كل البرامج
-  Future<void> _enterMini() async {
-    final bounds = await _env.window.bounds();
-    if (!mounted) return;
-    setState(() => _mini = true);
-    if (bounds == null) return;
-    _fullBounds = bounds;
-    final dpr = View.of(context).devicePixelRatio;
-    final w = 320 * dpr, h = 470 * dpr;
-    await _env.window.setBounds(
-      Rect.fromLTWH(bounds.right - w, bounds.top, w, h),
-    );
-    await _env.window.setAlwaysOnTop(true);
-  }
-
-  Future<void> _exitMini() async {
-    await _env.window.setAlwaysOnTop(false);
-    if (_fullBounds != null) await _env.window.setBounds(_fullBounds!);
-    if (mounted) setState(() => _mini = false);
+    if (choice == 'pause' && !_c.paused) _c.togglePause();
+    if (choice == 'end') await _c.finishEarly();
   }
 
   void _addIdea() {
-    final text = _ideaController.text.trim();
-    if (text.isEmpty) return;
-    setState(() => _ideas.add(text));
+    _c.addIdea(_ideaController.text);
     _ideaController.clear();
-  }
-
-  // 💡 الأفكار → ملاحظات المشروع
-  Future<void> _sendIdeasToNotes() async {
-    final project = widget.project;
-    if (project == null) return;
-    final all = await _projectStore.load();
-    final fresh = all.where((p) => p.id == project.id).firstOrNull;
-    if (fresh == null) {
-      setState(() => _ideasMessage = 'ما لقيت المشروع، يمكن انحذف');
-      return;
-    }
-    fresh.notes = [
-      if (fresh.notes.trim().isNotEmpty) fresh.notes.trim(),
-      for (final idea in _ideas) '• $idea',
-    ].join('\n');
-    await _projectStore.upsert(fresh);
-    if (!mounted) return;
-    setState(() => _ideasMessage = '✓ انضافت لملاحظات «${project.name}»');
-  }
-
-  // 💡 الأفكار → بطاقات في عمود الأفكار
-  Future<void> _sendIdeasToBoard() async {
-    final stamp = DateTime.now().microsecondsSinceEpoch;
-    final from = widget.project?.name ?? '';
-    await _projectStore.upsertAll([
-      for (var i = 0; i < _ideas.length; i++)
-        Project(
-          id: '${stamp}_$i',
-          name: _ideas[i],
-          notes: from.isEmpty
-              ? 'من جلسة «$_title»'
-              : 'من جلسة «$_title» على $from',
-          type: ProjectType.other,
-          status: ProjectStatus.idea,
-          color: _color,
-        ),
-    ]);
-    if (!mounted) return;
-    setState(
-      () => _ideasMessage = '✓ صارت ${_ideas.length} أفكار في عمود 💡 فكرة',
-    );
   }
 
   String _format(Duration d) {
@@ -415,12 +171,13 @@ class _FocusPageState extends State<FocusPage>
         animation: _motion,
         builder: (context, _) => CustomPaint(
           painter: FocusRosePainter(
-            growth: _phase == FocusPhase.focusing || _phase == FocusPhase.budded
-                ? _growth
+            growth:
+                _c.phase == FocusPhase.focusing || _c.phase == FocusPhase.budded
+                ? _c.growth
                 : 1,
-            color: _color,
+            color: _c.color,
             time: _motion.value * 600,
-            sparkles: _phase == FocusPhase.focusing && !_paused,
+            sparkles: _c.phase == FocusPhase.focusing && !_c.paused,
           ),
         ),
       ),
@@ -429,32 +186,34 @@ class _FocusPageState extends State<FocusPage>
 
   @override
   Widget build(BuildContext context) {
-    final focusing = _phase == FocusPhase.focusing;
+    final focusing = _c.phase == FocusPhase.focusing;
     return PopScope(
-      canPop: !focusing,
+      // جلسة بالخلفية: ترجع عادي والجلسة تكمل
+      canPop: _background || !focusing,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _onBack();
       },
       child: Scaffold(
-        backgroundColor: Color.lerp(Colors.white, _color, 0.06),
-        appBar: _mini
+        backgroundColor: Color.lerp(Colors.white, _c.color, 0.06),
+        appBar: _c.mini
             ? null
             : AppBar(
                 backgroundColor: Colors.transparent,
-                title: Text(widget.project?.name ?? 'جلسة تركيز'),
+                title: Text(_c.project?.name ?? 'جلسة تركيز'),
                 actions: [
-                  if (focusing || _phase == FocusPhase.onBreak)
+                  if (focusing || _c.phase == FocusPhase.onBreak)
                     Padding(
                       padding: const EdgeInsetsDirectional.only(end: 12),
                       child: IconButton(
                         tooltip: 'نافذة صغيرة فوق البرامج',
-                        onPressed: _enterMini,
+                        onPressed: () =>
+                            _c.enterMini(View.of(context).devicePixelRatio),
                         icon: const Icon(Icons.picture_in_picture_alt_outlined),
                       ),
                     ),
                 ],
               ),
-        body: _mini ? _miniBody(context) : _fullBody(context),
+        body: _c.mini ? _miniBody(context) : _fullBody(context),
       ),
     );
   }
@@ -469,9 +228,21 @@ class _FocusPageState extends State<FocusPage>
           child: Column(
             children: [
               _goalLine(theme),
+              if (_background &&
+                  (_c.phase == FocusPhase.focusing ||
+                      _c.phase == FocusPhase.onBreak))
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '↩ ارجع لمشاريعك متى ما تبي، والجلسة تكمل',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 12),
               Text(
-                _title,
+                _c.title,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall,
               ),
@@ -488,7 +259,7 @@ class _FocusPageState extends State<FocusPage>
 
   // 🎯 هدف اليوم: نقطة لكل جلسة
   Widget _goalLine(ThemeData theme) {
-    final done = _doneToday;
+    final done = _c.doneToday;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -499,23 +270,23 @@ class _FocusPageState extends State<FocusPage>
           ),
         ),
         const SizedBox(width: 10),
-        for (var i = 0; i < _goal; i++)
+        for (var i = 0; i < _c.goal; i++)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 2),
             child: Icon(
               i < done ? Icons.circle : Icons.circle_outlined,
               size: 12,
-              color: _color,
+              color: _c.color,
             ),
           ),
         const SizedBox(width: 10),
         Text(
-          '$done من $_goal',
+          '$done من ${_c.goal}',
           style: theme.textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),
         ),
-        if (done >= _goal) const Text('  🎉'),
+        if (done >= _c.goal) const Text('  🎉'),
       ],
     );
   }
@@ -526,11 +297,11 @@ class _FocusPageState extends State<FocusPage>
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
-    switch (_phase) {
+    switch (_c.phase) {
       case FocusPhase.focusing:
         return [
-          Text(_format(_planned - _focused), style: big),
-          if (_paused)
+          Text(_format(_c.remaining), style: big),
+          if (_c.paused)
             Text('⏸️ موقوف مؤقتاً', style: theme.textTheme.bodyMedium),
           const SizedBox(height: 16),
           Wrap(
@@ -539,12 +310,12 @@ class _FocusPageState extends State<FocusPage>
             runSpacing: 8,
             children: [
               FilledButton.tonalIcon(
-                onPressed: _togglePause,
-                icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
-                label: Text(_paused ? 'كمّل' : 'إيقاف مؤقت'),
+                onPressed: _c.togglePause,
+                icon: Icon(_c.paused ? Icons.play_arrow : Icons.pause),
+                label: Text(_c.paused ? 'كمّل' : 'إيقاف مؤقت'),
               ),
               OutlinedButton.icon(
-                onPressed: _addFiveMinutes,
+                onPressed: _c.addFiveMinutes,
                 icon: const Icon(Icons.more_time, size: 18),
                 label: const Text('زِد ٥ دقائق'),
               ),
@@ -564,8 +335,8 @@ class _FocusPageState extends State<FocusPage>
               for (final s in focusSounds)
                 ChoiceChip(
                   label: Text(s.label),
-                  selected: _sound == s.id,
-                  onSelected: (_) => _setSound(s.id),
+                  selected: _c.sound == s.id,
+                  onSelected: (_) => _c.setSound(s.id),
                 ),
             ],
           ),
@@ -578,29 +349,26 @@ class _FocusPageState extends State<FocusPage>
           Text('🌹 تفتحت وردتك!', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'ركّزت $_plannedMinutes دقيقة',
+            'ركّزت ${_c.plannedMinutes} دقيقة',
             style: theme.textTheme.bodyLarge,
           ),
-          if (_longBreak)
+          if (_c.longBreak)
             Text(
-              '🎉 $_doneToday جلسات اليوم! تستاهل راحة طويلة',
+              '🎉 ${_c.doneToday} جلسات اليوم! تستاهل راحة طويلة',
               style: theme.textTheme.bodyLarge,
             ),
           const SizedBox(height: 20),
           FilledButton.icon(
-            onPressed: _startBreak,
+            onPressed: _c.startBreak,
             icon: const Icon(Icons.local_cafe_outlined),
-            label: Text('ابدأ الراحة ($_breakMinutes د)'),
+            label: Text('ابدأ الراحة (${_c.breakMinutes} د)'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('رجوع'),
-          ),
+          TextButton(onPressed: _done, child: const Text('رجوع')),
           _ideasAfter(theme),
         ];
 
       case FocusPhase.budded:
-        final minutes = _focused.inMinutes;
+        final minutes = _c.focused.inMinutes;
         return [
           Text('🌱 وردتك صارت برعم', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
@@ -611,21 +379,17 @@ class _FocusPageState extends State<FocusPage>
             style: theme.textTheme.bodyLarge,
           ),
           const SizedBox(height: 20),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('رجوع'),
-          ),
+          FilledButton(onPressed: _done, child: const Text('رجوع')),
           _ideasAfter(theme),
         ];
 
       case FocusPhase.onBreak:
-        final left = _breakEndsAt!.difference(_now());
         return [
           Text(
-            _longBreak ? '☕ راحة طويلة' : '☕ وقت الراحة',
+            _c.longBreak ? '☕ راحة طويلة' : '☕ وقت الراحة',
             style: theme.textTheme.headlineMedium,
           ),
-          Text(_format(left.isNegative ? Duration.zero : left), style: big),
+          Text(_format(_c.breakLeft), style: big),
           const SizedBox(height: 16),
           for (final tip in const [
             '💧 اشرب ماء',
@@ -637,9 +401,19 @@ class _FocusPageState extends State<FocusPage>
               child: Text(tip, style: theme.textTheme.titleMedium),
             ),
           const SizedBox(height: 12),
-          _autoNextSwitch(theme),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Switch(value: _c.autoNext, onChanged: _c.setAutoNext),
+              const SizedBox(width: 8),
+              Text(
+                'ابدأ الجلسة الجاية لحالها',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
+          ),
           TextButton(
-            onPressed: () => _breakOver(skipped: true),
+            onPressed: _c.skipBreak,
             child: const Text('تخطّى الراحة'),
           ),
         ];
@@ -649,27 +423,13 @@ class _FocusPageState extends State<FocusPage>
           Text('💪 خلصت الراحة', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 20),
           FilledButton.icon(
-            onPressed: () => Navigator.pop(context, 'again'),
+            onPressed: _c.requestNext,
             icon: const Icon(Icons.replay),
             label: const Text('جلسة جديدة'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('رجوع'),
-          ),
+          TextButton(onPressed: _done, child: const Text('رجوع')),
         ];
     }
-  }
-
-  Widget _autoNextSwitch(ThemeData theme) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Switch(value: _autoNext, onChanged: _setAutoNext),
-        const SizedBox(width: 8),
-        Text('ابدأ الجلسة الجاية لحالها', style: theme.textTheme.bodyMedium),
-      ],
-    );
   }
 
   // 💡 صندوق الأفكار الطارئة
@@ -695,7 +455,7 @@ class _FocusPageState extends State<FocusPage>
             ),
           ),
         ),
-        if (_ideas.isNotEmpty) ...[const SizedBox(height: 12), _ideasList()],
+        if (_c.ideas.isNotEmpty) ...[const SizedBox(height: 12), _ideasList()],
       ],
     );
   }
@@ -705,13 +465,13 @@ class _FocusPageState extends State<FocusPage>
       spacing: 8,
       runSpacing: 8,
       alignment: WrapAlignment.center,
-      children: [for (final idea in _ideas) Chip(label: Text('💡 $idea'))],
+      children: [for (final idea in _c.ideas) Chip(label: Text('💡 $idea'))],
     );
   }
 
   // بعد الجلسة: وين تروح الأفكار؟
   Widget _ideasAfter(ThemeData theme) {
-    if (_ideas.isEmpty) return const SizedBox.shrink();
+    if (_c.ideas.isEmpty) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.only(top: 20),
       padding: const EdgeInsets.all(16),
@@ -722,15 +482,15 @@ class _FocusPageState extends State<FocusPage>
       child: Column(
         children: [
           Text(
-            '💡 أفكارك الطارئة (${_ideas.length})',
+            '💡 أفكارك الطارئة (${_c.ideas.length})',
             style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: 10),
           _ideasList(),
           const SizedBox(height: 12),
-          if (_ideasMessage != null)
+          if (_c.ideasMessage != null)
             Text(
-              _ideasMessage!,
+              _c.ideasMessage!,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: const Color(0xFF3A9A5B),
                 fontWeight: FontWeight.w600,
@@ -742,14 +502,14 @@ class _FocusPageState extends State<FocusPage>
               spacing: 8,
               runSpacing: 8,
               children: [
-                if (widget.project != null)
+                if (_c.project != null)
                   FilledButton.tonalIcon(
-                    onPressed: _sendIdeasToNotes,
+                    onPressed: _c.sendIdeasToNotes,
                     icon: const Icon(Icons.note_add_outlined, size: 18),
-                    label: Text('أضفها لملاحظات «${widget.project!.name}»'),
+                    label: Text('أضفها لملاحظات «${_c.project!.name}»'),
                   ),
                 OutlinedButton.icon(
-                  onPressed: _sendIdeasToBoard,
+                  onPressed: _c.sendIdeasToBoard,
                   icon: const Icon(Icons.lightbulb_outline, size: 18),
                   label: const Text('حوّلها لأفكار في اللوحة'),
                 ),
@@ -763,13 +523,9 @@ class _FocusPageState extends State<FocusPage>
   // 🪟 النافذة الصغيرة: الوردة والوقت وأهم زر
   Widget _miniBody(BuildContext context) {
     final theme = Theme.of(context);
-    final time = switch (_phase) {
-      FocusPhase.focusing => _format(_planned - _focused),
-      FocusPhase.onBreak => _format(
-        _breakEndsAt!.difference(_now()).isNegative
-            ? Duration.zero
-            : _breakEndsAt!.difference(_now()),
-      ),
+    final time = switch (_c.phase) {
+      FocusPhase.focusing => _format(_c.remaining),
+      FocusPhase.onBreak => _format(_c.breakLeft),
       FocusPhase.bloomed => '🌹',
       FocusPhase.budded => '🌱',
       FocusPhase.breakDone => '💪',
@@ -783,7 +539,7 @@ class _FocusPageState extends State<FocusPage>
               children: [
                 Expanded(
                   child: Text(
-                    _phase == FocusPhase.onBreak ? '☕ راحة' : _title,
+                    _c.phase == FocusPhase.onBreak ? '☕ راحة' : _c.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall,
@@ -791,7 +547,7 @@ class _FocusPageState extends State<FocusPage>
                 ),
                 IconButton(
                   tooltip: 'رجّع النافذة كبيرة',
-                  onPressed: _exitMini,
+                  onPressed: _c.exitMini,
                   icon: const Icon(Icons.open_in_full),
                 ),
               ],
@@ -805,31 +561,31 @@ class _FocusPageState extends State<FocusPage>
               ),
             ),
             const SizedBox(height: 8),
-            if (_phase == FocusPhase.focusing)
+            if (_c.phase == FocusPhase.focusing)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton.filledTonal(
-                    tooltip: _paused ? 'كمّل' : 'إيقاف مؤقت',
-                    onPressed: _togglePause,
-                    icon: Icon(_paused ? Icons.play_arrow : Icons.pause),
+                    tooltip: _c.paused ? 'كمّل' : 'إيقاف مؤقت',
+                    onPressed: _c.togglePause,
+                    icon: Icon(_c.paused ? Icons.play_arrow : Icons.pause),
                   ),
                   const SizedBox(width: 8),
                   IconButton.outlined(
                     tooltip: 'زِد ٥ دقائق',
-                    onPressed: _addFiveMinutes,
+                    onPressed: _c.addFiveMinutes,
                     icon: const Icon(Icons.more_time),
                   ),
                 ],
               )
-            else if (_phase == FocusPhase.bloomed)
+            else if (_c.phase == FocusPhase.bloomed)
               FilledButton(
-                onPressed: _startBreak,
-                child: Text('ابدأ الراحة ($_breakMinutes د)'),
+                onPressed: _c.startBreak,
+                child: Text('ابدأ الراحة (${_c.breakMinutes} د)'),
               )
             else
               FilledButton(
-                onPressed: _exitMini,
+                onPressed: _c.exitMini,
                 child: const Text('افتح النافذة'),
               ),
           ],

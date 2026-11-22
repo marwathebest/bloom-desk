@@ -18,7 +18,9 @@ import '../services/project_store.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/focus_controller.dart';
 import '../services/save_queue.dart';
+import '../widgets/focus_bar.dart';
 import '../widgets/idea_dialog.dart';
 import '../widgets/kanban_board.dart';
 import '../widgets/kanban_card.dart';
@@ -64,6 +66,9 @@ class _ProjectsPageState extends State<ProjectsPage> {
   @override
   void dispose() {
     _lifecycle.dispose();
+    // الصفحة الرئيسية تنقفل = البرنامج ينقفل: نوقف الجلسة الشغّالة
+    // (وقتها محفوظ، والبرنامج يعرض عليك تكمّلها المرة الجاية)
+    activeFocus.value?.close();
     super.dispose();
   }
 
@@ -123,6 +128,12 @@ class _ProjectsPageState extends State<ProjectsPage> {
 
   // 🌱 جلسة تركيز: تختار المشروع والمدة، وتنفتح صفحة الوردة
   Future<void> _startFocus([Project? project]) async {
+    // فيه جلسة شغّالة؟ نفتحها بدل ما نبدأ وحدة ثانية
+    final running = activeFocus.value;
+    if (running != null && !running.isClosed) {
+      await _openFocus(running);
+      return;
+    }
     final setup = await showDialog<FocusSetup>(
       context: context,
       builder: (_) =>
@@ -132,32 +143,72 @@ class _ProjectsPageState extends State<ProjectsPage> {
     await _runFocus(setup);
   }
 
-  Future<void> _runFocus(FocusSetup setup, {FocusSession? resume}) async {
-    final result = await Navigator.push<String>(
+  // تبدأ الجلسة كـ"محرّك" يعيش بالخلفية، والصفحة بس تعرضه
+  Future<void> _runFocus(
+    FocusSetup setup, {
+    FocusSession? resume,
+    bool open = true,
+  }) async {
+    activeFocus.value?.close();
+    final controller = FocusController(
+      task: setup.task,
+      minutes: setup.minutes,
+      project: setup.project,
+      resume: resume,
+    );
+    controller.onNext = (kind) => _onFocusNext(controller, kind);
+    controller.addListener(() => _watchSession(controller));
+    activeFocus.value = controller;
+    if (open) await _openFocus(controller);
+  }
+
+  Future<void> _openFocus(FocusController controller) async {
+    await Navigator.push<void>(
       context,
       MaterialPageRoute(
         builder: (_) => FocusPage(
-          task: setup.task,
-          minutes: setup.minutes,
-          project: setup.project,
-          resume: resume,
+          task: controller.task,
+          minutes: controller.plannedMinutes,
+          project: controller.project,
+          controller: controller,
         ),
       ),
     );
+    await _refreshSessions();
+  }
 
+  Future<void> _refreshSessions() async {
     final sessions = await _sessionStore.load();
-    if (!mounted) return;
-    setState(() => _sessions = sessions);
-    if (result == 'again') _startFocus(setup.project);
-    // "ابدأ الجلسة الجاية لحالها": نفس المشروع والمهمة والمدة، بدون نافذة
-    if (result == 'again-auto') {
-      _runFocus(
-        FocusSetup(
-          project: setup.project,
-          task: setup.task,
-          minutes: resume?.plannedMinutes ?? setup.minutes,
-        ),
-      );
+    if (mounted) setState(() => _sessions = sessions);
+  }
+
+  // لما تخلص الجلسة (تفتّحت أو صارت برعم) نحدّث ملخص اليوم
+  FocusPhase? _lastPhase;
+  void _watchSession(FocusController controller) {
+    if (controller.phase != _lastPhase) {
+      _lastPhase = controller.phase;
+      if (controller.phase == FocusPhase.bloomed ||
+          controller.phase == FocusPhase.budded) {
+        _refreshSessions();
+      }
+    }
+  }
+
+  // "جلسة جديدة" أو "ابدأ الجلسة الجاية لحالها"
+  void _onFocusNext(FocusController old, String kind) {
+    final wasOpen = old.pageOpen;
+    final setup = FocusSetup(
+      project: old.project,
+      task: old.task,
+      minutes: old.plannedMinutes,
+    );
+    old.close();
+    if (wasOpen) Navigator.of(context).popUntil((route) => route.isFirst);
+    if (kind == 'again-auto') {
+      // تبدأ لحالها، وتنفتح بس لو كنت فاتح الجلسة (ما نقاطعك وأنت في ملفاتك)
+      _runFocus(setup, open: wasOpen);
+    } else {
+      _startFocus(old.project);
     }
   }
 
@@ -487,10 +538,26 @@ class _ProjectsPageState extends State<ProjectsPage> {
           setState(() => _dragging = false);
           _addFromFolders(details.files.map((f) => f.path).toList());
         },
-        child: Stack(
+        child: Column(
           children: [
-            Positioned.fill(child: _buildContent(visible)),
-            if (_dragging) const Positioned.fill(child: _DropOverlay()),
+            // 🌱 شريط الجلسة: الجلسة تكمل وأنت في مشاريعك
+            ValueListenableBuilder<FocusController?>(
+              valueListenable: activeFocus,
+              builder: (context, controller, _) => controller == null
+                  ? const SizedBox.shrink()
+                  : FocusBar(
+                      controller: controller,
+                      onOpen: () => _openFocus(controller),
+                    ),
+            ),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(child: _buildContent(visible)),
+                  if (_dragging) const Positioned.fill(child: _DropOverlay()),
+                ],
+              ),
+            ),
           ],
         ),
       ),
