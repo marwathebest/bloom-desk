@@ -4,7 +4,7 @@
 ;   ISCC /DCRT_DIR="C:\Program Files\Microsoft Visual Studio\18\Community\VC\Redist\MSVC\14.52.37025\x64\Microsoft.VC145.CRT" installer\bloom_desk.iss
 
 #define AppName "Bloom Desk"
-#define AppVersion "1.1.0"
+#define AppVersion "1.1.1"
 #define AppExe "bloom_desk.exe"
 #define AppUrl "https://github.com/marwathebest/bloom-desk"
 
